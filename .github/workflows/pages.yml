@@ -34,7 +34,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Escribir configuración de Supabase
+      - name: Configuración de Supabase desde variables (opcional)
+        if: vars.SUPABASE_URL != ''
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}

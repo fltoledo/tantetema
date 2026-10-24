@@ -1,8 +1,8 @@
 // Configuración pública del sitio.
-// En GitHub Pages, el workflow de deploy reemplaza estos valores con las
-// variables del repo (Settings → Secrets and variables → Actions → Variables):
-//   SUPABASE_URL y SUPABASE_ANON_KEY.
-// La anon key de Supabase es pública por diseño: va al navegador de todos modos.
+// La publishable key de Supabase es pública por diseño: va al navegador de todos.
+// (Nunca pongas acá la secret key ni la service_role.)
+// Si forkeás el repo, cambiá estos valores o definí las variables SUPABASE_URL y
+// SUPABASE_ANON_KEY en Settings → Secrets and variables → Actions → Variables.
 // Si quedan vacías, el juego funciona en un solo navegador (pestañas) para probar.
-export const SUPABASE_URL = "";
-export const SUPABASE_ANON_KEY = "";
+export const SUPABASE_URL = "https://ofeerygfevehrbicwlil.supabase.co";
+export const SUPABASE_ANON_KEY = "sb_publishable_3_zW1dplCf0Uwhzcf7zdNA_yYd1Obn4";
