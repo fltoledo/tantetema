@@ -31,13 +31,16 @@ Si la metadata trae un año equivocado, el moderador lo corrige después de reve
 
 La anon key es pública por diseño (termina en el navegador de todos), así que no es un secreto. Ojo: Supabase pausa los proyectos gratis después de una semana sin uso. Si se pausó, se reactiva desde el panel.
 
-### 2. GitHub Pages
+### 2. Configurar el sitio
 
-1. En el repo, andá a **Settings → Secrets and variables → Actions → Variables** y creá `SUPABASE_URL` y `SUPABASE_ANON_KEY`.
-2. En **Settings → Pages → Source**, elegí **GitHub Actions**.
-3. Hacé push a `main`. El workflow corre los tests, escribe `src/config.js` con esas variables y publica el sitio.
+Poné la URL y la key en `src/config.js`. Como alternativa, si no querés que queden en el código (por ejemplo, en un fork), creá las variables `SUPABASE_URL` y `SUPABASE_ANON_KEY` en **Settings → Secrets and variables → Actions → Variables**: el workflow las usa si existen.
 
-Sin las variables, el sitio funciona igual pero en **modo local**: sincroniza solo entre pestañas del mismo navegador. Sirve para probar.
+### 3. GitHub Pages
+
+1. En **Settings → Pages → Source**, elegí **GitHub Actions**.
+2. Hacé push a `main`. El workflow corre los tests y publica el sitio.
+
+Si `src/config.js` queda vacío y no hay variables, el sitio funciona en **modo local**: sincroniza solo entre pestañas del mismo navegador. Sirve para probar.
 
 ## Desarrollo
 
