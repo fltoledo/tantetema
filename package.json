@@ -1,0 +1,12 @@
+{
+  "name": "tantetema",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Juego de fiesta: escuchá canciones y ordenalas por año.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "npx --yes http-server@14.1.1 -c-1 -p 8080 ."
+  },
+  "license": "MIT"
+}
