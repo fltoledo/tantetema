@@ -1,9 +1,10 @@
 // UI: pantallas de inicio, moderador y equipo. Render por strings + delegación de eventos.
-import { PRESETS } from "./sources/presets.js";
+import { PRESETS, LEVELS, DEFAULT_LEVEL } from "./sources/presets.js";
 import { createHost, roomCode, savedHost, clearSavedHost } from "./host.js";
 import { createTeamClient, savedTeam, clearSavedTeam } from "./team.js";
 import { hasRemote } from "./net/transport.js";
-import { BUY_COST, CHALLENGE_COST, MAX_TOKENS } from "./game.js";
+import { confetti, sadTrombone, unlockAudio } from "./fx.js";
+import { BUY_COST, CHALLENGE_COST, MAX_TOKENS, openSlot } from "./game.js";
 
 const $ = (s) => document.querySelector(s);
 const app = $("#app");
@@ -23,10 +24,11 @@ const ui = {
   peek: false,
   confirmEnd: false,
   joining: false,
+  fxKey: null, // final de partida ya festejado
 };
 
 function loadSetup() {
-  const def = { countries: ["uy", "ar", "int"], queries: "", playlists: "", yearFrom: 1960, yearTo: THIS_YEAR, popularity: "mix", mode: "sim", target: 10 };
+  const def = { countries: ["uy", "uyNow", "ar", "int"], levels: {}, queries: "", playlists: "", yearFrom: 1960, yearTo: THIS_YEAR, popularity: "mix", mode: "sim", target: 10 };
   try {
     return { ...def, ...JSON.parse(localStorage.getItem("tantetema.setup")) };
   } catch {
@@ -80,6 +82,7 @@ function render() {
   if (active) document.getElementById(active)?.focus();
   drawQr();
   syncAudio();
+  endEffects();
 }
 
 function homeView() {
@@ -123,6 +126,9 @@ function setupView() {
     <div class="stack"><span class="label">Países y estilos</span>
       <div class="chips">${Object.entries(PRESETS).map(([k, p]) => `<button class="chip" aria-pressed="${s.countries.includes(k)}" data-a="country" data-k="${k}">${esc(p.name)}</button>`).join("")}</div>
     </div>
+    ${s.countries.length > 1 ? `<div class="stack"><span class="label">Cuánto de cada uno</span>
+      <div class="weights">${s.countries.filter((k) => PRESETS[k]).map((k) => `<span class="wname">${esc(PRESETS[k].name)}</span>
+        <div class="seg" role="group" aria-label="Peso de ${esc(PRESETS[k].name)}">${LEVELS.map((l, i) => `<button aria-pressed="${levelOf(k) === i + 1}" data-a="level" data-k="${k}" data-l="${i + 1}">${l.name}</button>`).join("")}</div>`).join("")}</div></div>` : ""}
     <div class="stack"><label class="label" for="queries">Búsquedas extra (separadas por coma)</label>
       <input id="queries" placeholder="cumbia villera, murga, reggaeton 2000s" value="${esc(s.queries)}"></div>
     <div class="stack"><label class="label" for="playlists">Playlists de Deezer (una por línea, opcional)</label>
@@ -146,6 +152,8 @@ function setupView() {
   </section>
   <button class="primary block" data-a="createRoom">Crear sala</button>`;
 }
+
+const levelOf = (k) => ui.setup.levels?.[k] || PRESETS[k]?.level || DEFAULT_LEVEL;
 
 function readSetupInputs() {
   const s = ui.setup;
@@ -215,6 +223,7 @@ function hostView() {
     <button class="ghost block" data-a="replace" ${h.busy ? "disabled" : ""}>Cambiar canción</button>`;
   } else {
     body = `
+    ${g.status === "finished" ? champView(g) : ""}
     ${frontCard(song, r.n)}
     ${song.confidence !== "high" || song.corrected ? `<p class="small"><span class="pill warn">${song.corrected ? "Año corregido" : "Año a verificar"}</span></p>` : ""}
     <section class="panel"><h3>Resultados</h3>
@@ -231,15 +240,62 @@ function hostView() {
       <div class="row" style="margin-top:12px"><input id="fixYear" type="number" inputmode="numeric" min="1900" max="${THIS_YEAR}" placeholder="${song.year}" style="flex:1;min-width:0"><button class="ghost" data-a="fixYear">Corregir</button></div>
       <p class="small muted">Si la metadata trajo el año de un remaster o compilado. Se recalculan los resultados de esta ronda.</p>
     </details>
-    ${g.status === "finished" ? winnersView(g, true) : `${err}${busy}<button class="primary block" data-a="next" ${h.busy ? "disabled" : ""}>Siguiente canción →</button>`}`;
+    ${g.status === "finished" ? `<div class="row"><button class="go" data-a="keepPlaying">Seguir jugando (meta +5)</button><button class="ghost" data-a="newGame">Nueva partida</button></div>` : `${err}${busy}<button class="primary block" data-a="next" ${h.busy ? "disabled" : ""}>Siguiente canción →</button>`}`;
   }
   return `${head}${body}${scoreboard}`;
 }
 
-function winnersView(g, isHost) {
-  const names = g.teams.filter((t) => g.winners.includes(t.id)).map((t) => esc(t.name));
-  return `<div class="win">${names.length > 1 ? "¡Empate! Ganan " + names.join(" y ") : "¡Ganó " + names[0] + "!"}</div>
-  ${isHost ? `<div class="row"><button class="go" data-a="keepPlaying">Seguir jugando (meta +5)</button><button class="ghost" data-a="newGame">Nueva partida</button></div>` : ""}`;
+const winnerTeams = (g) => g.teams.filter((t) => g.winners.includes(t.id));
+
+// Pantalla del moderador: el nombre del ganador bien grande, para mostrarle a todos.
+function champView(g) {
+  const ws = winnerTeams(g);
+  return `<section class="champ" style="--c:${ws[0]?.color || "var(--sun)"}">
+    <span class="trophy" aria-hidden="true">🏆</span>
+    <span class="label">${ws.length > 1 ? "¡Empate! Ganan" : "Ganó"}</span>
+    ${ws.map((t) => `<div class="champ-name" style="color:${t.color}">${esc(t.name)}</div>`).join(`<span class="label">y</span>`)}
+    <span class="muted">${ws[0]?.count ?? ""} cartas en la línea</span>
+  </section>`;
+}
+
+const LOSER_LINES = [
+  "Ni con Shazam la sacaban.",
+  "Su línea de tiempo pidió la baja.",
+  "Les faltó calle. Y radio.",
+  "Tranqui: el año que viene ganan. O el otro.",
+  "La próxima pongan menos fichas y más oído.",
+  "Ganaron experiencia. Que no es poco. Bueno, es poco.",
+  "Esto les pasa por escuchar siempre la misma playlist.",
+  "Se les desafinó la década.",
+];
+
+function endView(st, me) {
+  const ws = winnerTeams(st);
+  if (ws.some((t) => t.id === me.id)) {
+    return `<section class="champ" style="--c:${me.color}">
+      <span class="trophy" aria-hidden="true">🏆</span>
+      <div class="champ-name" style="color:${me.color}">¡GANARON!</div>
+      <span class="muted">${ws.length > 1 ? "Compartido con " + ws.filter((t) => t.id !== me.id).map((t) => esc(t.name)).join(" y ") + ", pero cuenta igual." : "Son los que más saben de música de la fiesta."}</span>
+    </section>`;
+  }
+  const seed = [...(me.id + st.round?.n)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  return `<section class="lose">
+    <span class="sad" aria-hidden="true">🎺</span>
+    <div class="lose-title">Perdieron</div>
+    <p class="lose-line">${LOSER_LINES[seed % LOSER_LINES.length]}</p>
+    <span class="muted">Ganó ${ws.map((t) => `<b style="color:${t.color}">${esc(t.name)}</b>`).join(" y ")}.</span>
+  </section>`;
+}
+
+// Confeti o trombón triste, una sola vez por final (el estado se re-renderiza seguido).
+function endEffects() {
+  const st = ui.screen === "team" ? ui.team?.state : null;
+  if (st?.status !== "finished") return;
+  const key = `${ui.team.code}:${st.round?.n}:${st.winners.join()}`;
+  if (ui.fxKey === key) return;
+  ui.fxKey = key;
+  if (st.winners.includes(ui.team.teamId)) confetti();
+  else sadTrombone();
 }
 
 function scoreboardView(g) {
@@ -319,10 +375,10 @@ function teamView() {
     const res = r.results[me.id];
     const got = me.cards.some((c) => c.round === r.n);
     const song = r.song;
-    status = `${frontCard(song, r.n)}
+    status = `${st.status === "finished" ? endView(st, me) : ""}${frontCard(song, r.n)}
       ${res ? `<p class="verdict ${res.ok ? "ok" : "no"}">${res.ok ? (res.challenge ? "¡Se la robaron!" : "¡Bien ubicada! Es suya.") : res.challenge ? "El desafío no salió." : "Uh, no iba ahí."}</p>` : got ? `<p class="verdict ok">Carta comprada.</p>` : ""}
       ${!got && me.tokens >= BUY_COST && st.status === "playing" ? `<button class="ghost block" data-a="buy">Comprar esta carta (${BUY_COST} fichas)</button>` : ""}
-      ${st.status === "finished" ? winnersView(st, false) : `<p class="small muted">Esperando la próxima canción…</p>`}`;
+      ${st.status === "finished" ? "" : `<p class="small muted">Esperando la próxima canción…</p>`}`;
     tl = timeline(me, null, r.n);
   }
 
@@ -334,7 +390,9 @@ function teamView() {
 // opts.mode: "place" (propia), "challenge" (línea ajena), "view"
 function timeline(team, opts, highlightRound) {
   const cards = team.cards;
+  const years = cards.map((c) => c.year);
   const slot = (k) => {
+    if (!openSlot(years, k)) return "";
     if (!opts || opts.mode === "view") {
       if (opts && (opts.owner === k || opts.mine === k)) return `<div class="slot taken" role="note">${opts.owner === k ? "Eligieron acá" : "Su desafío"}</div>`;
       return "";
@@ -414,6 +472,12 @@ const A = {
     saveSetup();
     render();
   },
+  level(el) {
+    readSetupInputs();
+    ui.setup.levels = { ...ui.setup.levels, [el.dataset.k]: Number(el.dataset.l) };
+    saveSetup();
+    render();
+  },
   popularity: (el) => (readSetupInputs(), (ui.setup.popularity = el.dataset.k), saveSetup(), render()),
   mode: (el) => (readSetupInputs(), (ui.setup.mode = el.dataset.k), saveSetup(), render()),
   target: (el) => (readSetupInputs(), (ui.setup.target = Math.max(3, Math.min(20, ui.setup.target + Number(el.dataset.d)))), saveSetup(), render()),
@@ -422,6 +486,7 @@ const A = {
     const s = ui.setup;
     const config = {
       countries: s.countries,
+      levels: Object.fromEntries(s.countries.map((k) => [k, levelOf(k)])),
       queries: s.queries.split(",").map((q) => q.trim()).filter(Boolean),
       playlists: s.playlists.split(/\s+/).filter(Boolean),
       yearFrom: s.yearFrom,
@@ -556,6 +621,7 @@ function go(screen) {
   window.scrollTo(0, 0);
 }
 
+document.addEventListener("pointerdown", unlockAudio, { once: true });
 document.addEventListener("click", (ev) => {
   const el = ev.target.closest("[data-a]");
   if (!el || el.disabled) return;

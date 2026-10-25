@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Game, fits, GameError } from "../src/game.js";
+import { Game, fits, openSlot, GameError } from "../src/game.js";
 
 const song = (year, title = "T" + year) => ({ year, title, artist: "A", deezerId: year });
 
@@ -19,6 +19,25 @@ test("fits: acepta bordes y años iguales", () => {
   assert.equal(fits([1980, 1990], 2, 1990), true);
   assert.equal(fits([1980, 1990], 3, 2000), false);
   assert.equal(fits([], 0, 1999), true);
+});
+
+test("openSlot: no hay hueco entre dos cartas del mismo año", () => {
+  assert.equal(openSlot([2020, 2020], 0), true);
+  assert.equal(openSlot([2020, 2020], 1), false);
+  assert.equal(openSlot([2020, 2020], 2), true);
+  assert.equal(openSlot([2019, 2020], 1), true);
+});
+
+test("no se puede ubicar entre dos cartas del mismo año", () => {
+  const g = simGame(1, [2020]);
+  const [a] = g.teams;
+  g.newRound(song(2020, "Otra"));
+  g.place(a.id, 1);
+  g.reveal();
+  g.endRound();
+  g.newRound(song(2021));
+  assert.throws(() => g.place(a.id, 1), /Posición inválida/);
+  g.place(a.id, 2);
 });
 
 test("addTeam: nombres únicos y solo en el lobby", () => {

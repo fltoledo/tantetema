@@ -5,6 +5,7 @@ import { decideYear, createResolver, _clearCache } from "../src/sources/resolver
 import { earliestRecordingYear } from "../src/sources/musicbrainz.js";
 import { createFeed, normalizeConfig } from "../src/sources/feed.js";
 import { parsePlaylistRef, mapTrack } from "../src/sources/deezer.js";
+import { PRESETS } from "../src/sources/presets.js";
 
 test("cleanTitle saca sufijos de versión", () => {
   assert.equal(cleanTitle("Bohemian Rhapsody - Remastered 2011"), "Bohemian Rhapsody");
@@ -131,4 +132,79 @@ test("feed: excluye canciones ya jugadas", async () => {
   const feed = createFeed({ deezer, resolver: createResolver({ deezer, musicbrainz }), config: { countries: ["int"] }, exclude: [songKey("a-ha", "Take On Me")] });
   const songs = await feed.take(10);
   assert.ok(!songs.some((s) => s.title === "Take On Me"));
+});
+
+// Una playlist por preset, cada una con temas de artistas distintos.
+function fakeSourcesByPreset(years = {}) {
+  const lists = { uy: 101, uyNow: 102, int: 103 };
+  const tracks = {};
+  for (const [k, id] of Object.entries(lists)) {
+    tracks[id] = Array.from({ length: 60 }, (_, i) => {
+      const y = years[k]?.(i) ?? 1980 + (i % 40);
+      return { id: id * 1000 + i, artist: { name: `${k} artista ${i}` }, title: `${k} tema ${i}`, title_short: `${k} tema ${i}`, rank: 500000, preview: "p", album: { title: "Album", release_date: y + "-01-01" }, release_date: y + "-01-01" };
+    });
+  }
+  const byId = Object.fromEntries(Object.values(tracks).flat().map((t) => [t.id, t]));
+  const presetOf = (q) => Object.keys(lists).find((k) => PRESETS[k].queries.some((pq) => q === pq));
+  const deezer = {
+    queries: [],
+    async searchPlaylists(q) {
+      this.queries.push(q);
+      const k = presetOf(q);
+      return k ? [lists[k], lists[k] + 10, lists[k] + 20].map((id) => ({ id, title: k, nbTracks: 60 })) : [];
+    },
+    async playlistTracks(id) {
+      const list = tracks[id] || tracks[id - 10] || tracks[id - 20] || [];
+      return { total: list.length, tracks: list.map(mapTrack) };
+    },
+    async track(id) {
+      return { ...mapTrack(byId[id]), isrc: null, releaseDate: byId[id].release_date };
+    },
+  };
+  const musicbrainz = {
+    async yearByIsrc() {
+      return null;
+    },
+    async yearBySearch({ title }) {
+      const t = Object.values(byId).find((x) => x.title === title);
+      return t ? Number(t.release_date.slice(0, 4)) : null;
+    },
+  };
+  return { deezer, musicbrainz };
+}
+
+test("normalizeConfig: niveles por país con default del preset", () => {
+  const c = normalizeConfig({ countries: ["uy", "int", "ar"], levels: { int: 1, ar: 9 } });
+  assert.deepEqual(c.levels, { uy: 3, int: 1, ar: 2 });
+});
+
+test("feed: el peso de cada país se nota en el mazo", async () => {
+  _clearCache();
+  const { deezer, musicbrainz } = fakeSourcesByPreset();
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const feed = createFeed({ deezer, resolver: createResolver({ deezer, musicbrainz }), config: { countries: ["uy", "int"], levels: { uy: 3, int: 1 } }, rnd });
+  const songs = await feed.take(40);
+  const uy = songs.filter((s) => s.artist.startsWith("uy ")).length;
+  assert.equal(songs.length, 40);
+  assert.ok(uy >= 28, `esperaba ~4 de cada 5 uruguayas y salieron ${uy}/40`);
+});
+
+test("feed: Uruguay actual descarta lo anterior a su minYear y no agrega décadas", async () => {
+  _clearCache();
+  const { deezer, musicbrainz } = fakeSourcesByPreset({ uyNow: (i) => (i % 2 ? 1995 : 2012 + (i % 10)) });
+  const feed = createFeed({ deezer, resolver: createResolver({ deezer, musicbrainz }), config: { countries: ["uyNow"] } });
+  const songs = await feed.take(10);
+  assert.equal(songs.length, 10);
+  assert.ok(songs.every((s) => s.year >= PRESETS.uyNow.minYear));
+  assert.ok(deezer.queries.every((q) => PRESETS.uyNow.queries.includes(q)));
+});
+
+test("feed: si la búsqueda con década no encuentra nada, repite sin década", async () => {
+  _clearCache();
+  const { deezer, musicbrainz } = fakeSourcesByPreset();
+  const feed = createFeed({ deezer, resolver: createResolver({ deezer, musicbrainz }), config: { countries: ["uy"] }, rnd: () => 0.9 });
+  const songs = await feed.take(3);
+  assert.equal(songs.length, 3);
+  assert.ok(deezer.queries.some((q) => / (60s|70s|80s|90s|20\d0s|años \d0|hits 2024)$/.test(q)), "probó con década");
 });

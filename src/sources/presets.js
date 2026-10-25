@@ -1,11 +1,21 @@
 // Búsquedas de playlists por país. Son términos para /search/playlist de Deezer:
 // cada partida elige algunos al azar, así el mazo cambia cada vez.
 // Para sumar un país, agregá una entrada (los PRs son bienvenidos).
+// `level` es el peso por defecto (ver LEVELS). `recent` saca las pistas de década
+// de las búsquedas y `minYear` descarta lo anterior a ese año.
 
 export const PRESETS = {
   uy: {
     name: "Uruguay",
-    queries: ["rock uruguayo", "uruguay hits", "música uruguaya", "cumbia uruguaya", "clásicos uruguayos", "pop uruguayo", "candombe", "murga uruguaya"],
+    level: 3,
+    queries: ["rock uruguayo", "uruguay hits", "música uruguaya", "cumbia uruguaya", "clásicos uruguayos", "pop uruguayo", "candombe uruguayo", "murga uruguaya"],
+  },
+  uyNow: {
+    name: "Uruguay actual",
+    level: 3,
+    recent: true,
+    minYear: 2010,
+    queries: ["top 50 uruguay", "uruguay 2020", "plena uruguaya", "cumbia uruguaya 2025", "previa uruguay", "cumbia cheta", "indie uruguay", "trap uruguayo", "uruguay hits"],
   },
   ar: {
     name: "Argentina",
@@ -36,6 +46,14 @@ export const PRESETS = {
     queries: ["greatest hits of all time", "classic rock hits", "pop hits", "80s hits", "90s hits", "2000s hits", "70s hits", "60s hits", "2010s hits", "disco classics"],
   },
 };
+
+// Cuánto pesa cada país o estilo en el mazo.
+export const LEVELS = [
+  { name: "Poco", weight: 1 },
+  { name: "Normal", weight: 2 },
+  { name: "Mucho", weight: 4 },
+];
+export const DEFAULT_LEVEL = 2;
 
 // Sufijos de década para pedir variedad en las búsquedas.
 export const DECADE_HINTS = {

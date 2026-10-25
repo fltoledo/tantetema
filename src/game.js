@@ -24,7 +24,10 @@ export function fits(years, slot, year) {
   return before <= year && year <= after;
 }
 
-export const timelineYears = (team) => team.cards.map((c) => c.year).sort((a, b) => a - b);
+// Entre dos cartas del mismo año no hay hueco: esa posición no se ofrece.
+export const openSlot = (years, slot) => slot === 0 || slot === years.length || years[slot - 1] !== years[slot];
+
+export const timelineYears =(team) => team.cards.map((c) => c.year).sort((a, b) => a - b);
 
 export class Game {
   constructor({ mode = "sim", target = 10 } = {}) {
@@ -100,7 +103,7 @@ export class Game {
     if (r.phase !== "listening") fail("Ya se reveló");
     const team = this.team(teamId);
     if (this.mode === "turn" && r.turnTeamId !== teamId) fail("No es su turno");
-    if (!Number.isInteger(slot) || slot < 0 || slot > team.cards.length) fail("Posición inválida");
+    if (!Number.isInteger(slot) || slot < 0 || slot > team.cards.length || !openSlot(timelineYears(team), slot)) fail("Posición inválida");
     r.placements[teamId] = slot;
   }
 
@@ -121,7 +124,7 @@ export class Game {
     if (r.placements[owner.id] === undefined) fail("Primero tiene que ubicar el equipo en turno");
     if (r.challenges.some((c) => c.teamId === teamId)) fail("Ya desafiaron esta ronda");
     if (r.challenges.some((c) => c.slot === slot) || r.placements[owner.id] === slot) fail("Esa posición ya está tomada");
-    if (!Number.isInteger(slot) || slot < 0 || slot > owner.cards.length) fail("Posición inválida");
+    if (!Number.isInteger(slot) || slot < 0 || slot > owner.cards.length || !openSlot(timelineYears(owner), slot)) fail("Posición inválida");
     if (team.tokens < CHALLENGE_COST) fail("No tienen fichas");
     team.tokens -= CHALLENGE_COST;
     r.challenges.push({ teamId, slot });
