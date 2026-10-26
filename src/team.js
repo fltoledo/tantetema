@@ -84,11 +84,19 @@ export async function createTeamClient({ code, teamId = null, onChange = () => {
 
   Object.assign(t, {
     async join(name) {
+      // Se reintenta hasta que conteste el moderador: si se pierde un mensaje, el moderador
+      // reconoce el celu y no crea otro equipo.
+      const send = () => room.send({ type: "join", clientId: me, name }).catch(() => {});
+      let retry;
       const p = new Promise((resolve, reject) => {
         joinWaiter = { resolve, reject };
-        setTimeout(() => reject(new Error("No encontramos esa sala. Revisá el código y que el moderador tenga la app abierta.")), 8000);
-      }).finally(() => (joinWaiter = null));
-      await room.send({ type: "join", clientId: me, name });
+        setTimeout(() => reject(new Error("No encontramos esa sala. Revisá el código y que el moderador tenga la app abierta.")), 12000);
+      }).finally(() => {
+        joinWaiter = null;
+        clearInterval(retry);
+      });
+      send();
+      retry = setInterval(send, 2000);
       return p;
     },
     act(action, ...args) {

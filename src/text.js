@@ -20,10 +20,29 @@ export function songKey(artist, title) {
   return norm(artist) + "|" + norm(cleanTitle(title));
 }
 
-// Versiones que no queremos en el mazo: el año sería el de la versión, no el del tema.
-const BAD_VERSION = /\b(live|en vivo|ao vivo|directo|remix|karaoke|instrumental|cover|tribute|tributo|8-bit|lullaby|medley|mashup)\b/i;
+// Versiones que no queremos en el mazo: suenan distinto al original y confunden con el año.
+const BAD_VERSION = /\b(en vivo|ao vivo|en directo|remix|karaoke|instrumental|cover|tribute|tributo|8-bit|lullaby|medley|mashup|enganchados?|remake|sped up|slowed|nightcore|rkt)\b/i;
+const BAD_ALBUM = /\b(karaoke|tribute|tributo|lullaby|covers?|en vivo|ao vivo|unplugged|remix(es|ed)?|sped up|slowed|versiones|reimagined)\b|\blive (at|in|from)\b|\(live\)/i;
+
+// Marcas de versión: van entre paréntesis o corchetes, o después de " - ".
+const versionTags = (title) => [...title.matchAll(/[([]([^)\]]*)[)\]]|\s[-–]\s(.*)$/g)].map((m) => (m[1] ?? m[2]).trim());
+// Regrabaciones, versiones en otro género o idioma, sesiones y remixes de DJ.
+const REMAKE_TAG = /\b(versi[oó]n|version|mix|edit|re-?recorded|regrabad[ao]|live|vivo|directo|ac[uú]stic[ao]|acoustic|unplugged|sessions?|cumbia|cuarteto|reggaeton|merengueton|turreo|cachengue|guaracha|amapiano|spanish|english|portugu[eé]s|vs)\b/i;
+// Lo que nombra la grabación original ("2011 Remaster", "Radio Edit", "Album Version").
+const ORIGINAL_QUAL = /remaster\w*|digital\w*|single|album|álbum|radio|international|mono|stereo|original|explicit|clean|short|extended|\blp\b|7"|12"/gi;
+const JUST_VERSION = /^\W*(versi[oó]n|version|edit|mix)?\W*$/i;
+
+function isRemakeTag(tag) {
+  if (/^(feat|ft|featuring|with|con)\b/i.test(tag)) return false; // nombres de artistas invitados
+  const rest = tag.replace(/\b\d{4}\b/g, "");
+  const core = rest.replace(ORIGINAL_QUAL, "");
+  // "Versión 2020" o "Taylor's Version" es otra grabación; "Remastered Version" es la misma.
+  if (JUST_VERSION.test(core)) return /\w/.test(core) && core.length === rest.length;
+  return REMAKE_TAG.test(core);
+}
+
 export function isUnwantedVersion(title = "", album = "") {
-  return BAD_VERSION.test(title) || /\b(karaoke|tribute|tributo|lullaby|cover)\b/i.test(album);
+  return BAD_VERSION.test(title) || title.includes(" / ") || versionTags(title).some(isRemakeTag) || BAD_ALBUM.test(album);
 }
 
 // Álbumes cuya fecha no sirve para el año del tema.

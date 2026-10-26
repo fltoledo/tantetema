@@ -27,6 +27,21 @@ test("detecta versiones y compilados", () => {
   assert.ok(!looksLikeCompilation("Signos"));
 });
 
+test("descarta remixes, regrabaciones y versiones en otro género", () => {
+  for (const title of ["Ya No Vuelvas (Versión Cuarteto)", "Es Mi Culpa - Versión Cumbia", "Mujer Amante (Vivo)", "Novios en Verano No (Remake)", "Vuelve (Versión 2006)", "Pinterest (Spanish)", "Prohibidox (Turreo Edit)", "Ven Bailalo - Reggaeton Mix", "Mi Cama Huele a Ti (Reggaeton Version)", "Into The Night (Re-Recorded In Stereo)", "Girls Like You (Cardi B Version)", "Yo Tengo Un Ángel (Montevideo Music Sessions)", "Enganchados: Amores Como el Nuestro / La Travesia", "Ritmo RKT", "Hey Jude - Live", "Zafar (En Vivo)"]) {
+    assert.ok(isUnwantedVersion(title), title);
+  }
+  assert.ok(isUnwantedVersion("Tan Lejos", "Otras Canciones en Vivo en Latinoamérica"));
+  assert.ok(isUnwantedVersion("Girl on Fire", "Girl on Fire (Remixes) - EP"));
+});
+
+test("deja pasar la grabación original", () => {
+  for (const title of ["Bohemian Rhapsody - Remastered 2011", "Africa (2011 Remaster)", "Take On Me (Radio Edit)", "Billie Jean (Album Version)", "Hey Jude (Remastered Version 2009)", "Footloose (From \"Footloose\" Soundtrack)", "DISCOTEKA (feat. Locura Mix)", "If We Ever Meet Again (International Radio Edit)", "Persiana Americana (Versión Original)", "24/7", "Zafar", "Live and Let Die", "Directo al Corazón"]) {
+    assert.ok(!isUnwantedVersion(title), title);
+  }
+  assert.ok(!isUnwantedVersion("Live Forever", "Definitely Maybe"));
+});
+
 test("yearOf valida fechas", () => {
   assert.equal(yearOf("1986-11-10"), 1986);
   assert.equal(yearOf("0000-00-00"), null);

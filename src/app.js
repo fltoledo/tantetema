@@ -25,6 +25,7 @@ const ui = {
   confirmEnd: false,
   joining: false,
   fxKey: null, // final de partida ya festejado
+  flipped: null, // carta ya dada vuelta (moderador o equipo + ronda)
 };
 
 function loadSetup() {
@@ -104,12 +105,22 @@ function homeView() {
     <button class="role team" data-a="toJoin"><b>Equipo</b><span>Entrá con el código de la sala y armá tu línea de tiempo.</span></button>
   </div>
   <section class="panel how"><h2>Cómo se juega</h2>
+    <p>Cada canción es una carta con dos lados.</p>
+    <div class="sides">
+      <figure>${backCard("mini", `<span class="q">?</span>`)}<figcaption><b>Un lado no dice nada.</b> Solo suena la canción.</figcaption></figure>
+      <span class="turn-arrow" aria-hidden="true">↻</span>
+      <figure>${frontCard(DEMO.song, null, "mini")}<figcaption><b>El otro tiene la respuesta:</b> año, artista y tema.</figcaption></figure>
+    </div>
+    <p>Cada equipo arma su <b>línea de tiempo</b>: sus cartas ordenadas de la más vieja a la más nueva. Cuando suena una canción, tienen que decir dónde va: antes, entre medio o después de las que ya tienen. <b>No hace falta saber el año exacto</b>, alcanza con saber si es más vieja o más nueva.</p>
+    <div class="tl demo">${tcard(DEMO.before)}${mysteryTcard("¿Va acá?")}${tcard(DEMO.after)}</div>
+    <p class="small muted">Suena “${DEMO.song.title}” y tienen ${DEMO.before.year} y ${DEMO.after.year}: la ubican en el medio. El moderador la da vuelta, sale ${DEMO.song.year} y se la quedan.</p>
     <ol>
-      <li>El moderador crea la sala. Los equipos escanean el QR o ponen el código de 4 letras.</li>
-      <li>Cada equipo arranca con una carta revelada.</li>
-      <li>Suena una canción. Cada equipo marca en su celu dónde va en su línea de tiempo.</li>
-      <li>El moderador revela el año: si la ubicaron bien, se quedan la carta.</li>
-      <li>Si además adivinan artista y canción, ganan una ficha. Con ${BUY_COST} fichas compran una carta. Gana el primero que llega a la meta.</li>
+      <li>Un celu es el <b>moderador</b>: crea la sala y pone la música. Cada equipo entra desde su celu con el QR o el código de 4 letras.</li>
+      <li>Todos arrancan con una carta ya dada vuelta, para tener una referencia.</li>
+      <li>Suena una canción y cada equipo toca en su celu dónde va en su línea.</li>
+      <li>El moderador da vuelta la carta: si la ubicaron bien, se la quedan. Si no, se descarta.</li>
+      <li>Si además dicen el artista y el tema, ganan una ficha. Con ${BUY_COST} fichas pueden comprar una carta.</li>
+      <li>Gana el primer equipo que junta las cartas de la meta.</li>
     </ol>
   </section>
   <p class="small muted">Canciones y previews: Deezer. Años verificados con MusicBrainz.</p>`;
@@ -207,6 +218,7 @@ function hostView() {
     body = `
     ${g.mode === "turn" && turnTeam ? `<div class="turn">Le toca a ${esc(turnTeam.name)}</div>` : ""}
     <div class="card back">
+      <span class="disc" aria-hidden="true"></span>
       <span class="num">RONDA ${r.n}</span>
       ${song.preview ? `<button class="play ${player.paused ? "" : "on"}" data-a="togglePlay" aria-label="Reproducir o pausar">${player.paused ? "▶" : "❚❚"}</button><div class="bar"><i id="prog"></i></div>` : `<p class="muted">Esta canción no tiene preview. Usá Spotify o cambiala.</p>`}
       <span class="num">NO MUESTRES LA PANTALLA</span>
@@ -224,7 +236,7 @@ function hostView() {
   } else {
     body = `
     ${g.status === "finished" ? champView(g) : ""}
-    ${frontCard(song, r.n)}
+    ${revealCard(song, r.n, "host:" + r.n)}
     ${song.confidence !== "high" || song.corrected ? `<p class="small"><span class="pill warn">${song.corrected ? "Año corregido" : "Año a verificar"}</span></p>` : ""}
     <section class="panel"><h3>Resultados</h3>
       <div class="teams">${g.teams.map((t) => {
@@ -306,14 +318,42 @@ function scoreboardView(g) {
       <div class="progress"><i style="width:${Math.min(100, (t.count / g.target) * 100)}%;background:${t.color}"></i></div></div>`).join("")}</div></section>`;
 }
 
-function frontCard(song, n) {
-  return `<div class="card front" style="background:${decadeColor(song.year)}">
+// Ejemplo del home: una línea con dos cartas y la misteriosa en el medio.
+const DEMO = {
+  song: { year: 1986, title: "Persiana americana", artist: "Soda Stereo" },
+  before: { year: 1971, title: "Imagine", artist: "John Lennon" },
+  after: { year: 2004, title: "Zafar", artist: "La Vela Puerca" },
+};
+
+// Lado de la carta que no dice nada: solo un disco.
+function backCard(cls, inner = "") {
+  return `<div class="card back ${cls}"><span class="disc" aria-hidden="true"></span>${inner}</div>`;
+}
+
+function frontCard(song, n, cls = "") {
+  return `<div class="card front ${cls}" style="background:${decadeColor(song.year)}">
     ${song.cover ? `<img class="cover" src="${esc(song.cover)}" alt="">` : ""}
-    <span class="num">RONDA ${n}</span>
+    ${n ? `<span class="num">RONDA ${n}</span>` : ""}
     <span class="yr">${song.year}</span>
     <div><div class="song">${esc(song.title)}</div><div class="art">${esc(song.artist)}</div></div>
   </div>`;
 }
+
+// Al revelar, la carta se da vuelta. El estado se re-renderiza seguido: si ya está girando,
+// la animación sigue desde donde iba en vez de empezar de nuevo.
+const FLIP_MS = 1100;
+function revealCard(song, n, key) {
+  if (ui.flipped?.key !== key) ui.flipped = { key, at: Date.now() };
+  const elapsed = Date.now() - ui.flipped.at;
+  if (elapsed >= FLIP_MS) return frontCard(song, n);
+  return `<div class="flip"><div class="flipper" style="animation-delay:-${elapsed}ms">
+    ${frontCard(song, n)}
+    ${backCard("face-back", `<span class="num">RONDA ${n}</span><span class="q">?</span><span class="num">&nbsp;</span>`)}
+  </div></div>`;
+}
+
+const tcard = (c, cls = "") => `<div class="tcard ${cls}" style="background:${decadeColor(c.year)}"><span class="y">${c.year}</span><span class="t"><b>${esc(c.title)}</b><span>${esc(c.artist)}</span></span></div>`;
+const mysteryTcard = (label) => `<div class="tcard mystery"><span class="y">?</span><span class="t"><b>${esc(label)}</b><span>La canción que está sonando</span></span></div>`;
 
 /* ---------- equipo ---------- */
 function joinView() {
@@ -358,8 +398,8 @@ function teamView() {
     if (myTurn) {
       const slot = ui.mySlot?.slot;
       status = `${st.mode === "turn" ? `<div class="turn">¡Les toca!</div>` : ""}
-      <div class="card back" style="min-height:150px"><span class="num">RONDA ${r.n}</span><span class="verdict">?</span>
-      <span class="num">${slot == null ? "TOQUEN DÓNDE VA ↓" : "UBICADA · ESPEREN LA REVELACIÓN"}</span></div>`;
+      ${backCard("short", `<span class="num">RONDA ${r.n}</span><span class="q">?</span>
+      <span class="num">${slot == null ? "TOQUEN DÓNDE VA EN SU LÍNEA ↓" : "UBICADA · ESPEREN QUE LA DEN VUELTA"}</span>`)}`;
       tl = timeline(me, { mode: "place", selected: slot });
     } else {
       const owner = st.teams.find((x) => x.id === r.turnTeamId);
@@ -375,7 +415,7 @@ function teamView() {
     const res = r.results[me.id];
     const got = me.cards.some((c) => c.round === r.n);
     const song = r.song;
-    status = `${st.status === "finished" ? endView(st, me) : ""}${frontCard(song, r.n)}
+    status = `${st.status === "finished" ? endView(st, me) : ""}${revealCard(song, r.n, t.code + ":" + r.n)}
       ${res ? `<p class="verdict ${res.ok ? "ok" : "no"}">${res.ok ? (res.challenge ? "¡Se la robaron!" : "¡Bien ubicada! Es suya.") : res.challenge ? "El desafío no salió." : "Uh, no iba ahí."}</p>` : got ? `<p class="verdict ok">Carta comprada.</p>` : ""}
       ${!got && me.tokens >= BUY_COST && st.status === "playing" ? `<button class="ghost block" data-a="buy">Comprar esta carta (${BUY_COST} fichas)</button>` : ""}
       ${st.status === "finished" ? "" : `<p class="small muted">Esperando la próxima canción…</p>`}`;
@@ -403,10 +443,11 @@ function timeline(team, opts, highlightRound) {
       if (opts.taken.some((c) => c.slot === k)) return `<div class="slot taken" role="note">Ya desafiado</div>`;
       return `<button class="slot" data-a="challenge" data-k="${k}">${label}</button>`;
     }
-    return `<button class="slot" aria-pressed="${opts.selected === k}" data-a="place" data-k="${k}">${label}</button>`;
+    if (opts.selected === k) return `<button class="slot chosen" aria-pressed="true" data-a="place" data-k="${k}" aria-label="${label}. Tocar para sacarla">${mysteryTcard("La pusieron acá")}</button>`;
+    return `<button class="slot" aria-pressed="false" data-a="place" data-k="${k}">${label}</button>`;
   };
   return `<section class="stack"><span class="label">${esc(opts?.title || "Su línea de tiempo")}</span>
-    <div class="tl">${slot(0)}${cards.map((c, i) => `<div class="tcard ${highlightRound && c.round === highlightRound ? "new" : ""}" style="background:${decadeColor(c.year)}"><span class="y">${c.year}</span><span class="t"><b>${esc(c.title)}</b><span>${esc(c.artist)}</span></span></div>${slot(i + 1)}`).join("")}</div></section>`;
+    <div class="tl">${slot(0)}${cards.map((c, i) => `${tcard(c, highlightRound && c.round === highlightRound ? "new" : "")}${slot(i + 1)}`).join("")}</div></section>`;
 }
 
 /* ---------------- audio, QR ---------------- */

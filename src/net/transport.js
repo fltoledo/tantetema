@@ -33,19 +33,28 @@ export async function openRoom(code, { onMessage, onStatus = () => {} }) {
 
   const sb = await supabaseClient();
   let channel;
+  // Lo que se manda antes de suscribirse sale igual, pero la respuesta llega a un canal
+  // que todavía no escucha y se pierde. Por eso los envíos esperan la primera suscripción.
+  let subscribed;
+  const ready = new Promise((resolve) => (subscribed = resolve));
   const connect = () => {
     onStatus("connecting");
     channel = sb.channel(name, { config: { broadcast: { self: false, ack: false } } });
     channel.on("broadcast", { event: "msg" }, ({ payload }) => onMessage(payload));
     channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") onStatus("connected");
-      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") onStatus("offline");
+      if (status === "SUBSCRIBED") {
+        subscribed();
+        onStatus("connected");
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") onStatus("offline");
     });
   };
   connect();
   return {
     kind: "supabase",
-    send: (msg) => channel.send({ type: "broadcast", event: "msg", payload: msg }),
+    send: async (msg) => {
+      await ready;
+      return channel.send({ type: "broadcast", event: "msg", payload: msg });
+    },
     close: () => sb.removeChannel(channel),
   };
 }

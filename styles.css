@@ -109,12 +109,41 @@ textarea { min-height: 90px; resize: vertical; font-size: 0.9rem; }
 .links { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
 .links .spotify { background: #1ed760; color: #06210f; }
 
+/* Lado de atrás: un disco de fondo y un signo de pregunta */
+.card .disc { position: absolute; inset: 50% auto auto 50%; width: 78%; aspect-ratio: 1; max-width: 300px; transform: translate(-50%, -50%); border-radius: 50%; z-index: -1; opacity: 0.55;
+  background: radial-gradient(circle, var(--hot) 0 13%, #0d0820 13.5% 16%, transparent 16.5%), repeating-radial-gradient(circle, #0d0820 0 2px, #1d1440 2px 4px); }
+.card .q { font: 800 clamp(4rem, 20vw, 6rem) var(--display); line-height: 1; color: var(--fg); text-shadow: 0 4px 0 rgba(0, 0, 0, 0.4); }
+.card.short { min-height: 170px; }
+.card.mini { min-height: 0; aspect-ratio: 5 / 7; padding: 12px; border-radius: 14px; gap: 4px; justify-content: center; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25); }
+.card.mini .q { font-size: 2.6rem; }
+.card.mini .yr { font-size: 1.9rem; }
+.card.mini .song { font-size: 0.9rem; }
+.card.mini .art { font-size: 0.78rem; }
+.sides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: start; }
+.sides figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.sides figcaption { font-size: 0.84rem; color: var(--muted); }
+.sides figcaption b { color: var(--fg); }
+.turn-arrow { align-self: center; margin-top: -40px; font-size: 1.6rem; color: var(--sun); }
+
+/* Dar vuelta la carta al revelar */
+.flip { perspective: 1400px; }
+.flipper { position: relative; transform-style: preserve-3d; animation: flip 1.1s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
+.flipper > .card { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+.flipper > .face-back { position: absolute; inset: 0; min-height: 0; transform: rotateY(180deg); }
+@keyframes flip { 0%, 15% { transform: rotateY(180deg); } 100% { transform: rotateY(0); } }
+
 /* Línea de tiempo */
 .tl { display: flex; flex-direction: column; }
 .slot { width: 100%; min-height: 42px; border-radius: 12px; border: 2px dashed var(--line); background: transparent; color: var(--muted); font-size: 0.85rem; font-weight: 600; margin: 6px 0; }
 .slot[aria-pressed="true"] { border-style: solid; border-color: var(--hot); background: rgba(255, 77, 141, 0.2); color: var(--fg); }
 .slot.taken { border-style: solid; border-color: var(--sun); color: var(--sun); }
-.tcard { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; border-radius: 14px; padding: 12px 16px; color: var(--ink); }
+.tcard { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; border-radius: 14px; padding: 12px 16px; color: var(--ink); text-align: left;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45), 0 4px 0 rgba(0, 0, 0, 0.3); }
+.tcard.mystery { color: var(--fg); background: repeating-radial-gradient(circle at 20% 50%, #1b1236 0 3px, #241a47 3px 5px); box-shadow: inset 0 0 0 2px var(--hot), 0 4px 0 rgba(0, 0, 0, 0.3); }
+.tcard.mystery .y { color: var(--hot); min-width: 2ch; text-align: center; }
+.tcard.mystery .t span { opacity: 0.7; }
+.slot.chosen { border: 0; padding: 0; background: transparent; color: var(--fg); display: block; }
+.tl.demo { gap: 8px; }
 .tcard .y { font: 800 1.7rem var(--mono); letter-spacing: -0.03em; }
 .tcard .t { min-width: 0; }
 .tcard .t b { display: block; font-family: var(--display); font-size: 1.02rem; line-height: 1.15; overflow-wrap: anywhere; }
@@ -167,5 +196,7 @@ details summary { cursor: pointer; font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
   .eq i, .play.on, .spinner, .trophy, .champ-name, .sad, .lose-title { animation: none; }
+  .flipper { animation: none; }
+  .flipper > .face-back { display: none; }
 }
 .qr:empty { display: none; }
